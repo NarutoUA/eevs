@@ -1,0 +1,24 @@
+{
+  "name": "eevs",
+  "version": "0.1.0",
+  "dependencies": [
+    "cli11",
+    "doctest",
+    "ftxui",
+    "glaze",
+    "hdr-histogram",
+    "lz4",
+    "openssl",
+    "opus",
+    "quill",
+    "signalsmith-dsp",
+    "signalsmith-stretch",
+    {
+      "name": "usockets",
+      "features": [
+        "ssl"
+      ]
+    },
+    "uwebsockets"
+  ]
+}

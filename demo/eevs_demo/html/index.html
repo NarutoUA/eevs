@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EEVS Voice Control Center</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="app" class="app-shell hidden">
+        <!-- Top Header Bar -->
+        <header class="topbar">
+            <div class="brand-group">
+                <div class="brand-logo">
+                    <span class="logo-pulse"></span>
+                    <span class="logo-glyph">◈</span>
+                </div>
+                <div class="brand-titles">
+                    <h1>EEVS <span class="brand-sub">Enhanced External Voice Server</span></h1>
+                    <div class="telemetry-pills">
+                        <span id="connBadge" class="pill pill-neutral hidden"><span class="dot"></span>Connecting</span>
+                        <span id="gatewayBadge" class="pill pill-neutral">Gateway: --</span>
+                        <span id="pluginsBadge" class="pill pill-info">Plugins: 0</span>
+                        <span id="sessionsBadge" class="pill pill-info">Sessions: 0</span>
+                        <span id="perfTelemetryWrap" class="perf-tooltip-wrap">
+                            <span id="perfTelemetryBadge" class="pill pill-neutral" style="cursor:pointer;">⏱ Pipe: 0.0 µs | DSP: 0.0 µs</span>
+                            <div id="perfTooltipCard" class="perf-tooltip-card">
+                                <div class="perf-tooltip-title">EEVS Pipeline Microsecond Telemetry</div>
+                                <div class="perf-tooltip-row"><span>Ingress / Egress Packets:</span><strong id="ttPkts">0 / 0</strong></div>
+                                <div class="perf-tooltip-row"><span>Active Talking Speakers:</span><strong id="ttSpeakers">0</strong></div>
+                                <div class="perf-tooltip-row"><span>Opus Decode (avg / max):</span><strong id="ttDecode">0.0 / 0.0 µs</strong></div>
+                                <div class="perf-tooltip-row"><span>Signalsmith DSP (avg / max):</span><strong id="ttDsp">0.0 / 0.0 µs</strong></div>
+                                <div class="perf-tooltip-row"><span>Opus Encode (avg / max):</span><strong id="ttEncode">0.0 / 0.0 µs</strong></div>
+                                <div class="perf-tooltip-row"><span>End-to-End Pipe (avg / max):</span><strong id="ttPipe">0.0 / 0.0 µs</strong></div>
+                                <div class="perf-tooltip-hint">Click badge to reset telemetry counters</div>
+                            </div>
+                        </span>
+                        <span class="pill pill-neutral topbar-cache-pill">
+                            <span>LRU: <strong id="clipMemStats">0 KB</strong> (<span id="clipCountLabel">0 clips in RAM</span>)</span>
+                            <span class="topbar-cache-track"><span id="clipMemBar" class="topbar-cache-fill" style="width: 0%"></span></span>
+                        </span>
+                        <span id="selfNetIdBadge" class="pill pill-accent">NetID #1</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="topbar-right">
+                <div id="micStatusBox" class="mic-indicator">
+                    <div class="mic-bars">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                    <span id="micBadgeText">Mic Idle [Hold N]</span>
+                </div>
+                <button id="btnOpenAudioCppWebUi" class="btn btn-primary btn-icon" title="Open embedded audio.cpp WebUI &amp; Model Manager (/audio_cpp)">🎛 audio.cpp UI</button>
+                <button id="btnRefresh" class="btn btn-ghost btn-icon" title="Refresh Telemetry &amp; State">↻ Refresh</button>
+                <button id="btnClose" class="btn btn-danger-soft btn-icon" title="Close Panel (ESC)">✕ ESC</button>
+            </div>
+        </header>
+
+        <!-- Standalone Browser Mode Connection Bar -->
+        <section id="standaloneBar" class="standalone-bar hidden">
+            <div class="standalone-inner">
+                <span class="standalone-tag">BROWSER WS MODE</span>
+                <input id="wsUrlInput" type="text" value="ws://127.0.0.1:30124/ws" placeholder="ws://127.0.0.1:30124/ws" />
+                <input id="wsTokenInput" type="password" placeholder="Control Key / sv_licenseKey" />
+                <div class="input-inline">
+                    <label for="targetNetIdInput">Self NetID</label>
+                    <input id="targetNetIdInput" type="number" value="1" min="1" max="65535" style="width:76px" />
+                </div>
+                <button id="btnWsConnect" class="btn btn-primary btn-sm">Connect</button>
+            </div>
+        </section>
+
+        <!-- Main Workspace Layout: Sidebar Navigation + Content Area -->
+        <div class="workspace">
+            <aside class="sidebar">
+                <nav class="nav-list">
+                    <button class="nav-item active" data-tab="routing">
+                        <span class="nav-icon">⇄</span>
+                        <div class="nav-text">
+                            <strong>Routing &amp; Sessions</strong>
+                        </div>
+                    </button>
+                    <button class="nav-item" data-tab="clips">
+                        <span class="nav-icon">◉</span>
+                        <div class="nav-text">
+                            <strong>Recorder &amp; Clips</strong>
+                        </div>
+                    </button>
+                    <button class="nav-item" data-tab="effects">
+                        <span class="nav-icon">🎚</span>
+                        <div class="nav-text">
+                            <strong>Voice Effects</strong>
+                        </div>
+                    </button>
+                    <button class="nav-item" data-tab="tts">
+                        <span class="nav-icon">🔊</span>
+                        <div class="nav-text">
+                            <strong>Speech Synthesis</strong>
+                        </div>
+                    </button>
+                    <button class="nav-item" data-tab="vdes">
+                        <span class="nav-icon">🎭</span>
+                        <div class="nav-text">
+                            <strong>Voice Design</strong>
+                        </div>
+                    </button>
+                    <button class="nav-item" data-tab="stt">
+                        <span class="nav-icon">🎙</span>
+                        <div class="nav-text">
+                            <strong>Speech-to-Text</strong>
+                        </div>
+                    </button>
+                    <button class="nav-item" data-tab="llm">
+                        <span class="nav-icon">🤖</span>
+                        <div class="nav-text">
+                            <strong>Interactive NPC</strong>
+                        </div>
+                    </button>
+                </nav>
+
+                <!-- Quick Self-Loopback Card in Sidebar (Always Accessible) -->
+                <div class="sidebar-widget">
+                    <div class="widget-header">
+                        <span>SOLO SELF-ECHO</span>
+                        <span id="echoStateBadge" class="mini-badge">OFF</span>
+                    </div>
+                    <p class="widget-hint">Route your own mic back to yourself for solo testing.</p>
+                    <div class="segmented-control">
+                        <button class="seg-btn active" data-echo="off">Off</button>
+                        <button class="seg-btn" data-echo="2D">2D Radio</button>
+                        <button class="seg-btn" data-echo="3D">3D Spatial</button>
+                    </div>
+                </div>
+
+                <!-- Talker Proximity Range Card in Sidebar -->
+                <div class="sidebar-widget">
+                    <div class="widget-header">
+                        <span>TALKER RANGE [Z]</span>
+                        <span id="proxRangeBadge" class="mini-badge">MAX</span>
+                    </div>
+                    <div class="segmented-control">
+                        <button class="seg-btn" data-prox="whisper" title="Whisper (3m)">3m</button>
+                        <button class="seg-btn" data-prox="normal" title="Normal (12m)">12m</button>
+                        <button class="seg-btn" data-prox="shout" title="Shout (28m)">28m</button>
+                        <button class="seg-btn" data-prox="megaphone" title="Megaphone PA (75m + PA DSP)">75m PA</button>
+                        <button class="seg-btn active" data-prox="unlimited" title="Channel Max (0.0m)">Max</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Tab Content Panes -->
+            <main class="content-area">
+                <!-- TAB 1: ROUTING & LIVE SESSIONS -->
+                <div id="tab-routing" class="tab-pane active">
+                    <div class="pane-grid two-col">
+                        <!-- Live Sessions & Real-time VAD -->
+                        <section class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2>Live Voice Sessions</h2>
+                                </div>
+                                <span class="badge-hint">Click session to target</span>
+                            </div>
+                            <div id="sessionList" class="list-container"></div>
+                        </section>
+
+                        <!-- Asymmetric Routing & Acoustic Matrix -->
+                        <section class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2>Custom Routing Matrix</h2>
+                                    <p class="card-subtitle">Override <code>VoiceStreamingSync</code> with asymmetric 2D/3D routes</p>
+                                </div>
+                                <button id="btnRouteClearAll" class="btn btn-xs btn-danger-soft" title="Clear all custom route overrides">Reset All</button>
+                            </div>
+
+                            <div class="form-grid">
+                                <div class="field">
+                                    <label for="routeFromInput">Speaker NetID</label>
+                                    <input id="routeFromInput" type="number" placeholder="e.g. 1 (or NPC ID)" min="1" max="65535" />
+                                </div>
+                                <div class="field">
+                                    <label for="routeToInput">Listener NetID</label>
+                                    <input id="routeToInput" type="number" placeholder="e.g. 2" min="1" max="65535" />
+                                </div>
+                                <div class="field">
+                                    <label for="routeModeSelect">Routing Mode</label>
+                                    <select id="routeModeSelect">
+                                        <option value="2D">2D Non-Spatial (Radio)</option>
+                                        <option value="3D">3D Spatial (Positional)</option>
+                                        <option value="BOTH">Both (3D + 2D)</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="routeActionSelect">Override Mode</label>
+                                    <select id="routeActionSelect">
+                                        <option value="force">Force (Replace Mode)</option>
+                                        <option value="merge">Merge (Bitwise-OR)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="btn-row">
+                                <button id="btnRouteAdd" class="btn btn-primary">＋ Apply Route</button>
+                                <button id="btnRouteBlock" class="btn btn-danger-soft">⊘ Block Pair</button>
+                                <button id="btnRouteRemove" class="btn btn-secondary">✕ Remove Pair</button>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <div class="card-subheader">
+                                <h3>Quick Routing Presets (Target Selected NetID)</h3>
+                            </div>
+                            <div class="quick-actions-grid">
+                                <button id="btnQuickWiretap" class="action-tile" title="Listen to Speaker NetID in 2D without them hearing you">
+                                    <span class="tile-icon">🎧</span>
+                                    <div>
+                                        <strong>One-Way Wiretap</strong>
+                                        <small>Speaker → You (2D)</small>
+                                    </div>
+                                </button>
+                                <button id="btnQuickIntercom" class="action-tile" title="Broadcast your voice to Listener NetID in 2D">
+                                    <span class="tile-icon">📢</span>
+                                    <div>
+                                        <strong>2D Intercom</strong>
+                                        <small>You → Listener (2D)</small>
+                                    </div>
+                                </button>
+                                <button id="btnQuickClearSelf" class="action-tile" title="Clear all custom overrides for your speaker NetID">
+                                    <span class="tile-icon">🧹</span>
+                                    <div>
+                                        <strong>Clear My Overrides</strong>
+                                        <small>Restore default sync</small>
+                                    </div>
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- TAB 2: VOICE RECORDER & CLIP STUDIO -->
+                <div id="tab-clips" class="tab-pane hidden">
+                    <div class="pane-grid two-col-wide-right">
+                        <!-- Left Column: Microphone Recorder + NPC Voice Actor + Disk Loader -->
+                        <div class="stack-col">
+                            <section class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>Microphone Recorder</h2>
+                                    </div>
+                                    <span id="recStatusPill" class="pill pill-neutral">IDLE</span>
+                                </div>
+
+                                <div class="field">
+                                    <label for="recClipIdInput">Custom Clip ID (optional)</label>
+                                    <input id="recClipIdInput" type="text" placeholder="Auto-generated if empty (e.g. radio_beep)" />
+                                </div>
+
+                                <div class="row-between">
+                                    <label class="toggle-switch">
+                                        <input id="recIsolate" type="checkbox" checked />
+                                        <span>Isolate Mic (Mute proximity while recording)</span>
+                                    </label>
+                                </div>
+
+                                <div class="btn-row">
+                                    <button id="btnRecStart" class="btn btn-danger">● Start Recording</button>
+                                    <button id="btnRecStop" class="btn btn-secondary">■ Stop &amp; Save</button>
+                                </div>
+                            </section>
+
+                            <section class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>NPC Voice Actor Stage</h2>
+                                        <p class="card-subtitle">Spawn in-world NPCs in front of you &amp; play clips through them</p>
+                                    </div>
+                                    <span id="npcCountBadge" class="pill pill-accent">0 NPCs</span>
+                                </div>
+
+                                <div class="field">
+                                    <label for="npcActiveSelect">Target Speaker</label>
+                                    <select id="npcActiveSelect">
+                                        <option value="self">👤 Yourself (Local Player)</option>
+                                    </select>
+                                </div>
+
+                                <div class="btn-row">
+                                    <button id="btnNpcSpawn" class="btn btn-primary">🧍＋ Spawn NPC in Front</button>
+                                    <button id="btnNpcClear" class="btn btn-danger-soft btn-icon">🗑 Clear NPCs</button>
+                                </div>
+                            </section>
+
+                            <section class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>Load Clip from Disk</h2>
+                                        <p class="card-subtitle">Import <code>.wav</code> or <code>.eevs</code> into RAM cache</p>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid">
+                                    <div class="field">
+                                        <label for="loadFilePathInput">File Path</label>
+                                        <input id="loadFilePathInput" type="text" placeholder="recordings/clip_000001.wav" />
+                                    </div>
+                                    <div class="field">
+                                        <label for="loadClipIdInput">Clip ID (optional)</label>
+                                        <input id="loadClipIdInput" type="text" placeholder="Filename stem" />
+                                    </div>
+                                </div>
+                                <button id="btnLoadClipDisk" class="btn btn-secondary">📂 Load into ClipManager</button>
+                            </section>
+                        </div>
+
+                        <!-- Right Column: In-Memory Clip Library & Multi-Clip Mixer -->
+                        <section class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2>In-Memory Clip Library &amp; Multi-Track Player</h2>
+                                    <p class="card-subtitle">Play clips from yourself or through a spawned NPC in front of you</p>
+                                </div>
+                                <div class="btn-row-tight">
+                                    <button id="btnPlayAll2D" class="btn btn-xs btn-primary" title="Play top 2 clips simultaneously to test multi-clip mixing">⚡ Mix Top 2</button>
+                                    <button id="btnStopClips" class="btn btn-xs btn-secondary">■ Stop All</button>
+                                    <button id="btnClearClipCache" class="btn btn-xs btn-danger-soft" title="Delete all cached clips from RAM">🗑 Clear Cache</button>
+                                </div>
+                            </div>
+
+                            <div id="clipList" class="list-container tall"></div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- TAB 3: AUDIO.CPP TTS -->
+                <div id="tab-tts" class="tab-pane hidden">
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Neural Text-to-Speech Synthesis</h2>
+                            </div>
+                            <span id="ttsBackendBadge" class="pill pill-info">Backend: audio.cpp</span>
+                        </div>
+
+                        <div class="form-grid three-col">
+                            <div class="field">
+                                <label for="ttsModelSelect">TTS Engine / Model</label>
+                                <div class="input-with-btn">
+                                    <select id="ttsModelSelect">
+                                        <option value="">(Auto / Default Engine)</option>
+                                    </select>
+                                    <button id="btnRefreshTtsModels" class="btn btn-secondary btn-icon-only" title="Rescan Models">↻</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="ttsVoiceSelect">Voice Preset</label>
+                                <select id="ttsVoiceSelect">
+                                    <option value="default">Default</option>
+                                    <option value="female">Female</option>
+                                    <option value="male">Male</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="ttsModeSelect">Broadcast Mode</label>
+                                <select id="ttsModeSelect">
+                                    <option value="3D">3D Spatial (From Ped)</option>
+                                    <option value="2D">2D Non-Spatial (Radio)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Model Parameters discovered from audio.cpp /v1/models?include_params=true -->
+                        <div id="ttsDynamicParamsSection" class="dynamic-params-box hidden">
+                            <div class="dynamic-params-header">
+                                <span id="ttsDynamicParamsTitle">MODEL PARAMETERS</span>
+                                <span id="ttsDynamicParamsSubtitle" class="card-subtitle">Discovered via <code>/v1/models?include_params=true</code></span>
+                            </div>
+                            <div id="ttsDynamicParamsGrid" class="form-grid three-col"></div>
+                        </div>
+
+                        <div class="field">
+                            <label for="ttsTextInput">Utterance Text</label>
+                            <textarea id="ttsTextInput" rows="3" placeholder="Enter dispatch readout or NPC dialogue...">Attention all units, we have a 10-80 in progress southbound on Strawberry Avenue.</textarea>
+                        </div>
+
+                        <div class="preset-chips">
+                            <span class="chip-label">Quick Prompts:</span>
+                            <button class="chip" data-tts-prompt="Attention all units, code 3 alarm triggered at Fleeca Bank.">🚓 Police Dispatch</button>
+                            <button class="chip" data-tts-prompt="Welcome aboard Los Santos Transit. Next stop: Pillbox Hill.">🚆 Transit Announcer</button>
+                            <button class="chip" data-tts-prompt="Warning: Automated perimeter defense system is now active.">🤖 Security AI</button>
+                        </div>
+
+                        <div class="btn-row">
+                            <button id="btnTtsSpeak" class="btn btn-primary">🔊 Speak Text (TTS)</button>
+                            <button id="btnTtsCache" class="btn btn-secondary">💾 Cache Clip Only</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- TAB 3B: AUDIO.CPP VOICE DESIGN (VDES) -->
+                <div id="tab-vdes" class="tab-pane hidden">
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Prompt-Driven Neural Voice Design</h2>
+                                <p class="card-subtitle">Design custom character voices from a natural-language description (<code>instruct</code>) + deterministic <code>seed</code> (<code>task: vdes</code>)</p>
+                            </div>
+                            <span id="vdesBackendBadge" class="pill pill-info">Backend: audio.cpp (vdes)</span>
+                        </div>
+
+                        <div class="form-grid three-col">
+                            <div class="field">
+                                <label for="vdesModelSelect">Voice Design Engine / Model</label>
+                                <div class="input-with-btn">
+                                    <select id="vdesModelSelect">
+                                        <option value="">(Auto / Default Voice Design)</option>
+                                    </select>
+                                    <button id="btnRefreshVdesModels" class="btn btn-secondary btn-icon-only" title="Rescan Voice Design Models">↻</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="vdesSeedInput">Voice Identity Seed</label>
+                                <div class="input-with-btn">
+                                    <input id="vdesSeedInput" type="number" min="0" max="4294967295" value="421337" placeholder="e.g. 421337" />
+                                    <button id="btnVdesRandomSeed" class="btn btn-secondary btn-icon-only" title="Generate Random Seed">🎲</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="vdesModeSelect">Broadcast Mode</label>
+                                <select id="vdesModeSelect">
+                                    <option value="3D">3D Spatial (From Ped)</option>
+                                    <option value="2D">2D Non-Spatial (Radio)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="vdesInstructInput">Voice Design Prompt (<code>instruct</code> — Gender, Age, Accent, Tone &amp; Character)</label>
+                            <input id="vdesInstructInput" type="text" value="A stern, authoritative male LSPD police officer in his 30s with a clear, commanding American voice." placeholder="Describe the speaker's gender, age, timbre, emotion, and persona..." />
+                        </div>
+
+                        <div class="preset-chips">
+                            <span class="chip-label">Voice Archetypes:</span>
+                            <button class="chip" data-vdes-instruct="A stern, authoritative male LSPD police officer in his 30s with a clear, commanding American voice." data-vdes-seed="104821">🚓 Male Cop</button>
+                            <button class="chip" data-vdes-instruct="A sharp, composed female LSPD police officer in her late 20s with a confident, professional American voice." data-vdes-seed="208419">🚓 Female Cop</button>
+                            <button class="chip" data-vdes-instruct="An aggressive, streetwise male Los Santos gang member in his 20s with a rough, gravelly, hostile tone." data-vdes-seed="661904">🔫 Male Gang</button>
+                            <button class="chip" data-vdes-instruct="A fierce, street-smart female Los Santos gang member in her 20s with a bold, confrontational attitude." data-vdes-seed="773215">🔫 Female Gang</button>
+                            <button class="chip" data-vdes-instruct="A friendly, laid-back male convenience store clerk in his 30s with a casual, conversational voice." data-vdes-seed="339102">🏪 Male Clerk</button>
+                            <button class="chip" data-vdes-instruct="A calm, caring female emergency paramedic in her 30s with an urgent, reassuring tone." data-vdes-seed="512908">🚑 Female Medic</button>
+                        </div>
+
+                        <!-- Dynamic Model Parameters discovered from audio.cpp /v1/models?include_params=true -->
+                        <div id="vdesDynamicParamsSection" class="dynamic-params-box hidden">
+                            <div class="dynamic-params-header">
+                                <span id="vdesDynamicParamsTitle">VOICE DESIGN MODEL PARAMETERS</span>
+                                <span id="vdesDynamicParamsSubtitle" class="card-subtitle">Discovered via <code>/v1/models?include_params=true</code></span>
+                            </div>
+                            <div id="vdesDynamicParamsGrid" class="form-grid three-col"></div>
+                        </div>
+
+                        <div class="field">
+                            <label for="vdesTextInput">Utterance Text</label>
+                            <textarea id="vdesTextInput" rows="2" placeholder="Enter dialogue to synthesize with the designed voice...">Step out of the vehicle with your hands up where I can see them!</textarea>
+                        </div>
+
+                        <div class="btn-row">
+                            <button id="btnVdesSpeak" class="btn btn-primary">🎭 Speak with Designed Voice</button>
+                            <button id="btnVdesCache" class="btn btn-secondary">💾 Cache Clip Only</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- TAB 4: AUDIO.CPP STT -->
+                <div id="tab-stt" class="tab-pane hidden">
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Real-Time Speech-to-Text Dictation</h2>
+                            </div>
+                            <span id="sttBackendBadge" class="pill pill-info">Backend: audio.cpp</span>
+                        </div>
+
+                        <div class="form-grid three-col">
+                            <div class="field">
+                                <label for="sttModelSelect">STT Engine / Model</label>
+                                <div class="input-with-btn">
+                                    <select id="sttModelSelect">
+                                        <option value="">(Auto / Default Engine)</option>
+                                    </select>
+                                    <button id="btnRefreshSttModels" class="btn btn-secondary btn-icon-only" title="Rescan Models">↻</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="sttLangSelect">Spoken Language</label>
+                                <select id="sttLangSelect">
+                                    <option value="en">English (en)</option>
+                                    <option value="auto">Auto-Detect</option>
+                                    <option value="uk">Ukrainian (uk)</option>
+                                    <option value="pl">Polish (pl)</option>
+                                    <option value="de">German (de)</option>
+                                    <option value="es">Spanish (es)</option>
+                                    <option value="fr">French (fr)</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="sttPromptInput">Initial Context / Hotwords (optional)</label>
+                                <input id="sttPromptInput" type="text" placeholder="e.g. LSPD, 10-4, Legion Square..." />
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Model Parameters discovered from audio.cpp /v1/models?include_params=true -->
+                        <div id="sttDynamicParamsSection" class="dynamic-params-box hidden">
+                            <div class="dynamic-params-header">
+                                <span id="sttDynamicParamsTitle">MODEL PARAMETERS</span>
+                                <span id="sttDynamicParamsSubtitle" class="card-subtitle">Discovered via <code>/v1/models?include_params=true</code></span>
+                            </div>
+                            <div id="sttDynamicParamsGrid" class="form-grid three-col"></div>
+                        </div>
+
+                        <div class="row-between stt-controls-bar">
+                            <div class="Toggle-group">
+                                <label class="toggle-switch">
+                                    <input id="sttIsolate" type="checkbox" />
+                                    <span>Isolate Mic (Mute proximity while dictating)</span>
+                                </label>
+                                <label class="toggle-switch">
+                                    <input id="sttTranslate" type="checkbox" />
+                                    <span>Translate to English</span>
+                                </label>
+                            </div>
+                            <span class="hotkey-hint">In-Game Hotkey: Hold <kbd>J</kbd> + <kbd>N</kbd></span>
+                        </div>
+
+                        <div class="btn-row">
+                            <button id="btnSttStart" class="btn btn-primary">◉ Start Listening</button>
+                            <button id="btnSttStop" class="btn btn-secondary">📝 Stop &amp; Transcribe (STT)</button>
+                        </div>
+
+                        <div class="transcript-panel">
+                            <div class="transcript-header">
+                                <span>TRANSCRIPTION OUTPUT</span>
+                                <div id="sttMetrics" class="transcript-metrics">
+                                    <span id="sttMetricDur">Duration: --</span>
+                                    <span id="sttMetricConf">Confidence: --</span>
+                                    <span id="sttMetricRms">RMS: --</span>
+                                </div>
+                            </div>
+                            <div id="sttOutput" class="transcript-body">Hold [N] to speak into your microphone while STT capture is active...</div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- TAB 5: INTERACTIVE NPC & LLM -->
+                <div id="tab-llm" class="tab-pane hidden">
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Interactive AI NPC &amp; Dispatch (LLM + Voice)</h2>
+                            </div>
+                            <div class="btn-row-tight">
+                                <button id="btnLlmSpawnNpc" class="btn btn-xs btn-primary" title="Spawn an NPC in front of you to converse with">🧍＋ Spawn NPC</button>
+                                <button id="btnLlmDeleteNpcs" class="btn btn-xs btn-danger-soft" title="Delete all spawned NPCs">🗑 Delete NPCs</button>
+                            </div>
+                        </div>
+
+                        <div class="form-grid three-col">
+                            <div class="field">
+                                <label for="llmModelSelect">LLM Model</label>
+                                <div class="input-with-btn">
+                                    <select id="llmModelSelect">
+                                        <option value="">(Auto / Default LLM)</option>
+                                    </select>
+                                    <button id="btnRefreshLlmModels" class="btn btn-secondary btn-icon-only" title="Rescan LLM Models">↻</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="llmSttModelSelect">Speech-to-Text Model</label>
+                                <div class="input-with-btn">
+                                    <select id="llmSttModelSelect">
+                                        <option value="">(Auto / Default STT)</option>
+                                    </select>
+                                    <button id="btnRefreshLlmSttModels" class="btn btn-secondary btn-icon-only" title="Rescan STT Models">↻</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="llmVdesModelSelect">Voice Design Model</label>
+                                <div class="input-with-btn">
+                                    <select id="llmVdesModelSelect">
+                                        <option value="">(Auto / Default Voice Design)</option>
+                                    </select>
+                                    <button id="btnRefreshLlmVdesModels" class="btn btn-secondary btn-icon-only" title="Rescan Voice Design Models">↻</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-grid" style="grid-template-columns: 1.1fr 0.95fr 0.95fr 0.85fr 0.65fr;">
+                            <div class="field">
+                                <label for="llmPersonaSelect">NPC Preset</label>
+                                <select id="llmPersonaSelect">
+                                    <option value="cop">🚓 LSPD Officer</option>
+                                    <option value="medic">🚑 Paramedic</option>
+                                    <option value="clerk">🏪 Store Clerk</option>
+                                    <option value="gang">🔫 Gang Member</option>
+                                    <option value="custom">✏️ Custom</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="llmGenderSelect">NPC Gender / Ped</label>
+                                <select id="llmGenderSelect">
+                                    <option value="female">♀ Female (s_f_y_cop_01)</option>
+                                    <option value="male">♂ Male (s_m_y_cop_01)</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="llmNpcSelect">Speaking Target</label>
+                                <select id="llmNpcSelect">
+                                    <option value="self">👤 Yourself / Radio</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="llmNpcSeedInput">NPC Voice Seed</label>
+                                <div class="input-with-btn">
+                                    <input id="llmNpcSeedInput" type="number" min="0" max="4294967295" value="208419" title="Unique seed keeping this NPC's generated voice consistent" />
+                                    <button id="btnLlmRandomSeed" class="btn btn-secondary btn-icon-only" title="Roll new unique seed for next spawned NPC">🎲</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="llmNpcGainInput">Voice Gain (x)</label>
+                                <input id="llmNpcGainInput" type="number" min="0.2" max="3.0" step="0.1" value="1.0" title="Per-NPC voice volume multiplier (0.2x to 3.0x)" />
+                            </div>
+                        </div>
+
+                        <div id="llmCustomModelField" class="field hidden">
+                            <label for="llmCustomModelInput">Custom Ped Model Name (GTA V / FiveM Ped Archetype)</label>
+                            <input id="llmCustomModelInput" type="text" value="a_m_y_business_01" placeholder="e.g. a_m_y_business_01, s_m_y_swat_01, ig_lestercrest..." />
+                        </div>
+
+                        <div class="field">
+                            <label for="llmVoiceInstructInput">NPC Voice Design Prompt (<code>instruct</code> sent to <code>audio.cpp</code> Voice Design model)</label>
+                            <input id="llmVoiceInstructInput" type="text" value="A sharp, composed female LSPD police officer in her late 20s with a confident, authoritative American voice." />
+                        </div>
+
+                        <div class="field">
+                            <div class="row-between">
+                                <label for="llmSystemPromptInput">System Prompt (Game &amp; Character Instructions sent to LLM API)</label>
+                                <label class="toggle-switch" title="When enabled, pressing [E] Interact makes the NPC speak or react first without waiting for you to talk">
+                                    <input id="llmNpcInitiateFirst" type="checkbox" />
+                                    <span>NPC Initiates Conversation on [E] Interact</span>
+                                </label>
+                            </div>
+                            <input id="llmSystemPromptInput" type="text" value="You are an LSPD police officer on patrol in Los Santos (GTA V). If a citizen asks for help, protection, or backup against enemies, be supportive and protect them. If the citizen themselves disrespects, threatens, or attacks you, be strict and aggressive. Keep spoken replies in-character, natural, and concise (1 to 2 sentences max)." />
+                        </div>
+
+                        <!-- Collapsible Broadcast & Proximity Settings -->
+                        <details id="npcProximityCollapsible" class="collapsible-box">
+                            <summary class="collapsible-summary">
+                                <div class="collapsible-title-group">
+                                    <span class="collapsible-chevron">▶</span>
+                                    <span>Broadcast &amp; Proximity Settings</span>
+                                    <span id="npcBroadcastSummaryBadge" class="mini-badge">3D Nearby • Hear 35m • Interact 3.5m</span>
+                                </div>
+                            </summary>
+                            <div class="collapsible-body">
+                                <div class="form-grid" style="grid-template-columns: 1.55fr 0.75fr 0.75fr 0.75fr 0.85fr;">
+                                    <div class="field">
+                                        <label for="llmBroadcastScopeSelect">Broadcast Mode &amp; Scope</label>
+                                        <select id="llmBroadcastScopeSelect">
+                                            <option value="3d_nearby">🔊 3D Spatial — Everyone Nearby</option>
+                                            <option value="3d_private">👤 3D Spatial — Interacting Player Only</option>
+                                            <option value="2d_private">🎧 2D Radio / Phone — Interacting Player Only</option>
+                                            <option value="2d_all">📡 2D Radio / PA — All Players Server-Wide</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="llmHearingRadiusInput">Hearing Radius (m)</label>
+                                        <input id="llmHearingRadiusInput" type="number" min="5" max="150" step="5" value="35" title="3D spatial audio hearing &amp; server streaming radius in meters" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="llmInteractDistInput">[E] Range (m)</label>
+                                        <input id="llmInteractDistInput" type="number" min="1.5" max="15" step="0.5" value="3.5" title="Distance within which [E] Interact (or Auto-Engage) triggers" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="llmAutoStopDistInput">Auto-Stop (m)</label>
+                                        <input id="llmAutoStopDistInput" type="number" min="5" max="100" step="5" value="20" title="Walk-away distance that automatically stops an active NPC conversation" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="llmDespawnDistInput">Despawn (m, 0=Off)</label>
+                                        <input id="llmDespawnDistInput" type="number" min="0" max="500" step="10" value="100" title="Distance at which spawned NPCs are automatically deleted (0 = never auto-delete)" />
+                                    </div>
+                                </div>
+
+                                <div class="row-between" style="padding-top: 2px;">
+                                    <label class="toggle-switch" title="Automatically start interaction when you walk into [E] Range without needing to press [E]">
+                                        <input id="llmAutoEngageProximity" type="checkbox" />
+                                        <span>Auto-Engage When Player Enters [E] Range (Hands-Free Trigger)</span>
+                                    </label>
+                                    <span class="dynamic-param-hint">Applies to newly spawned NPCs &amp; active interactions in real time</span>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Collapsible Spawned NPCs List -->
+                        <details id="npcListCollapsible" class="collapsible-box">
+                            <summary class="collapsible-summary">
+                                <div class="collapsible-title-group">
+                                    <span class="collapsible-chevron">▶</span>
+                                    <span>Spawned NPCs</span>
+                                    <span id="npcListCountBadge" class="mini-badge">0 active</span>
+                                </div>
+                            </summary>
+                            <div class="collapsible-body">
+                                <div id="npcManageList" class="npc-manage-list"></div>
+                            </div>
+                        </details>
+
+                        <!-- Collapsible Available Tools / Actions Selector -->
+                        <details id="npcToolsCollapsible" class="collapsible-box">
+                            <summary class="collapsible-summary">
+                                <div class="collapsible-title-group">
+                                    <span class="collapsible-chevron">▶</span>
+                                    <span>Available Tools / Actions</span>
+                                    <span id="npcToolsCountBadge" class="mini-badge">35 / 35 enabled</span>
+                                </div>
+                                <div class="btn-row-tight">
+                                    <button type="button" id="btnNpcToolsAll" class="btn btn-xs btn-secondary">Check All</button>
+                                    <button type="button" id="btnNpcToolsNone" class="btn btn-xs btn-secondary">Uncheck All</button>
+                                </div>
+                            </summary>
+                            <div class="collapsible-body">
+                                <div id="npcToolsGrid" class="tools-checkbox-grid"></div>
+                            </div>
+                        </details>
+
+                        <div class="row-between stt-controls-bar">
+                            <div class="input-with-btn" style="flex: 1;">
+                                <input id="llmPromptInput" type="text" placeholder="Type a message to the NPC, or use Voice-to-Voice buttons on the right..." value="Officer, someone just stole my vehicle near Legion Square!" />
+                                <button id="btnAiChatSpeak" class="btn btn-primary btn-sm">💬 Send Text &amp; Speak</button>
+                            </div>
+                            <div class="btn-row-tight">
+                                <button id="btnLlmTalkStart" class="btn btn-danger btn-sm" title="Start capturing your microphone (Hold [N] to speak to NPC)">🎙 Hold Mic</button>
+                                <button id="btnConverseStop" class="btn btn-primary btn-sm" title="Stop mic capture, transcribe via audio.cpp, query llama.cpp, and speak reply">🤖🔊 Stop &amp; NPC Reply</button>
+                            </div>
+                        </div>
+
+                        <div class="transcript-panel">
+                            <div class="transcript-header">
+                                <span>INTERACTIVE NPC DIALOGUE LOG</span>
+                                <span id="llmStatusText" class="transcript-metrics">Ready</span>
+                            </div>
+                            <div id="llmChatLog" class="transcript-body">Spawn an NPC or type/speak a message above to start an in-character voice conversation...</div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- TAB 6: REAL-TIME VOICE EFFECTS (SIGNALSMITH DSP & STRETCH) -->
+                <div id="tab-effects" class="tab-pane hidden">
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Real-Time Voice Effects &amp; Acoustic DSP</h2>
+                            </div>
+                            <div class="btn-row-tight">
+                                <button id="btnFxApply" class="btn btn-xs btn-primary">⚡ Apply DSP Effect</button>
+                                <button id="btnFxClearSelf" class="btn btn-xs btn-danger-soft">✕ Clear My Effects</button>
+                                <button id="btnFxClearAll" class="btn btn-xs btn-secondary">🧹 Clear All Players</button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Preset Chips -->
+                        <div class="preset-chips">
+                            <span class="chip-label">Quick Presets:</span>
+                            <button class="chip" data-fx-preset="mask" data-fx-branch="all">🎭 Anonymous Mask</button>
+                            <button class="chip" data-fx-preset="radio" data-fx-branch="2D">📻 Police Radio (2D)</button>
+                            <button class="chip" data-fx-preset="tunnel_phone" data-fx-branch="2D">🚇 Tunnel Phone (2D Only)</button>
+                            <button class="chip" data-fx-preset="megaphone" data-fx-branch="3D">📢 Megaphone (3D)</button>
+                            <button class="chip" data-fx-preset="robot" data-fx-branch="all">🤖 Cyber Robot</button>
+                            <button class="chip" data-fx-preset="demon" data-fx-branch="all">👹 Demon Monster</button>
+                            <button class="chip" data-fx-preset="helium" data-fx-branch="all">🎈 Helium</button>
+                            <button class="chip" data-fx-preset="underwater" data-fx-branch="all">🌊 Underwater</button>
+                            <button class="chip" data-fx-preset="cave_reverb" data-fx-branch="3D">🏛 Cave FDN Reverb</button>
+                        </div>
+
+                        <div class="form-grid three-col">
+                            <div class="field">
+                                <label for="fxPresetSelect">Effect Preset</label>
+                                <select id="fxPresetSelect">
+                                    <option value="mask">🎭 Anonymous Mask (-3.5st + Formant)</option>
+                                    <option value="radio">📻 Police Walkie-Talkie (2D Radio)</option>
+                                    <option value="tunnel_phone">🚇 Tunnel Phone Signal (2D Dropouts)</option>
+                                    <option value="megaphone">📢 Police Megaphone (Horn + Slapback)</option>
+                                    <option value="robot">🤖 Cyber Android (Ring Mod + Comb)</option>
+                                    <option value="demon">👹 Demon / Monster (-6st + Sub-Octave)</option>
+                                    <option value="helium">🎈 Helium Chipmunk (+5.5st)</option>
+                                    <option value="underwater">🌊 Underwater / Scuba (Muffled LPF)</option>
+                                    <option value="cave_reverb">🏛 Tunnel / Cave FDN Reverb</option>
+                                    <option value="custom">🎛 Custom Signalsmith Chain</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="fxBranchSelect">Target Routing Stage / Branch</label>
+                                <select id="fxBranchSelect">
+                                    <option value="all">🌐 All Streams (PerSpeakerIngress)</option>
+                                    <option value="2D">🎧 2D Radio / Phone Only (3D Untouched!)</option>
+                                    <option value="3D">🔊 3D Proximity Only (2D Untouched!)</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="fxTargetNetIdInput">Target Speaker NetID</label>
+                                <select id="fxTargetNetIdInput">
+                                    <option value="self">Self (Your Character)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <div class="field">
+                                <label for="fxPitchInput">Pitch Shift (Semitones)</label>
+                                <input id="fxPitchInput" type="number" min="-12" max="12" step="0.5" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxHighpassInput">High-Pass Filter (Hz)</label>
+                                <input id="fxHighpassInput" type="number" min="20" max="4000" step="20" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxLowpassInput">Low-Pass Filter (Hz)</label>
+                                <input id="fxLowpassInput" type="number" min="200" max="20000" step="100" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxDriveInput">Overdrive / Grit (0..1)</label>
+                                <input id="fxDriveInput" type="number" min="0" max="1" step="0.05" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxNoiseInput">Radio Static Hiss (0..0.2)</label>
+                                <input id="fxNoiseInput" type="number" min="0" max="0.2" step="0.005" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxDropoutInput">Tunnel Dropout Rate (0..0.95)</label>
+                                <input id="fxDropoutInput" type="number" min="0" max="0.95" step="0.05" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxReverbWetInput">FDN Reverb Mix (0..1)</label>
+                                <input id="fxReverbWetInput" type="number" min="0" max="1" step="0.05" placeholder="Preset default" />
+                            </div>
+                            <div class="field">
+                                <label for="fxOutputGainInput">Output Gain (0.2..3.0x)</label>
+                                <input id="fxOutputGainInput" type="number" min="0.2" max="3.0" step="0.1" placeholder="1.0" />
+                            </div>
+                        </div>
+
+                        <div class="transcript-panel" style="max-height: 185px;">
+                            <div class="transcript-header">
+                                <span>ACTIVE SPEAKER DSP CHAINS</span>
+                                <span id="fxActiveCountBadge" class="transcript-metrics">0 active</span>
+                            </div>
+                            <div id="fxActiveList" class="transcript-body" style="padding: 8px;">No active voice effects. Select a preset above and click Apply (enable Solo Self-Echo in the sidebar to hear yourself!).</div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+
+        <!-- Live Event Stream & Console Footer -->
+        <footer class="statusbar">
+            <div class="statusbar-left">
+                <span class="status-tag">LIVE EVENT BUS</span>
+                <span id="eventLog" class="status-message">Ready. Press [F7] or /eevs to toggle UI. Push-to-Talk [N] remains active while open.</span>
+            </div>
+            <div id="eventHistoryPills" class="event-stream-pills"></div>
+        </footer>
+    </div>
+
+    <!-- Embedded audio.cpp Server WebUI Modal (/audio_cpp) -->
+    <div id="audiocppModal" class="audiocpp-shell hidden">
+        <header class="topbar">
+            <div class="brand-group">
+                <div class="brand-logo">
+                    <span class="logo-glyph">🎛</span>
+                </div>
+                <div class="brand-titles">
+                    <h1>audio.cpp <span class="brand-sub">Studio &amp; Model Manager (Embedded NUI)</span></h1>
+                </div>
+            </div>
+
+            <div class="audiocpp-urlbar">
+                <input id="audiocppUrlInput" type="text" value="http://127.0.0.1:8080" placeholder="http://127.0.0.1:8080" />
+                <button id="btnAudioCppReload" class="btn btn-primary btn-sm">↻ Load / Reload</button>
+            </div>
+
+            <div class="topbar-right">
+                <button id="btnBackToEevs" class="btn btn-ghost btn-icon" title="Switch to /eevs Voice Control Center">⇄ /eevs Panel</button>
+                <button id="btnCloseAudioCpp" class="btn btn-danger-soft btn-icon" title="Close Panel (ESC)">✕ ESC</button>
+            </div>
+        </header>
+        <iframe id="audiocppFrame" class="audiocpp-iframe" allow="microphone; autoplay; clipboard-read; clipboard-write"></iframe>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/tabs.js"></script>
+    <script src="js/npc_tab.js"></script>
+</body>
+</html>

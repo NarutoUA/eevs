@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+
+jobs:
+  build-windows:
+    name: Windows (MSVC 2026 x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-windows-x64-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-windows-x64-
+
+      - name: Ensure vcpkg cache directory exists
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path "${{ github.workspace }}/.vcpkg-cache" -Force | Out-Null
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Run CTest Suite
+        shell: pwsh
+        run: ctest --test-dir build -C Release --output-on-failure --verbose
+
+      - name: Upload Windows Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eevs-windows-x64
+          path: |
+            build/src/Release/eevs.exe
+            build/src/Release/eevs_bench.exe
+            build/src/Release/*.dll
+            build/src/Release/plugins/*.dll
+            eevs.cfg
+            include/
+            scripts/eevs/
+            demo/eevs_demo/
+            LICENSE
+            LICENSE.MIT
+            src/LICENSE
+
+  build-linux:
+    name: Linux (${{ matrix.compiler }} x64)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: clang++-18
+            cc: clang-18
+            cxx: clang++-18
+          - compiler: g++-14
+            cc: gcc-14
+            cxx: g++-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar clang-18 gcc-14 g++-14
+
+      - name: Set up vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-linux-x64-${{ matrix.compiler }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-linux-x64-${{ matrix.compiler }}-
+            vcpkg-linux-x64-
+
+      - name: Ensure vcpkg cache directory exists
+        run: mkdir -p "${{ github.workspace }}/.vcpkg-cache"
+
+      - name: Configure CMake
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build Release
+        run: cmake --build build --config Release --parallel
+
+      - name: Run CTest Suite
+        run: ctest --test-dir build -C Release --output-on-failure --verbose
+
+      - name: Upload Linux Build Artifacts
+        if: matrix.compiler == 'clang++-18'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eevs-linux-x64
+          path: |
+            build/src/eevs
+            build/src/eevs_bench
+            build/src/Release/plugins/*.so
+            build/src/*/plugins/*.so
+            eevs.cfg
+            include/
+            scripts/eevs/
+            demo/eevs_demo/
+            LICENSE
+            LICENSE.MIT
+            src/LICENSE

@@ -1,0 +1,63 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'include/**'
+      - 'src/**/*.h'
+      - 'cmake/Doxyfile.in'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-docs:
+    name: Generate Doxygen Documentation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Doxygen & Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Generate Doxygen HTML
+        run: |
+          sed -e "s|@PROJECT_VERSION@|0.1.0|g" \
+              -e "s|@PROJECT_SOURCE_DIR@|$GITHUB_WORKSPACE|g" \
+              -e "s|@CMAKE_CURRENT_BINARY_DIR@|$GITHUB_WORKSPACE/build|g" \
+              -e "s|@DOXYGEN_DOT_FOUND@|YES|g" \
+              cmake/Doxyfile.in > Doxyfile.ci
+          mkdir -p build/docs
+          doxygen Doxyfile.ci
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs/html
+
+  deploy-docs:
+    name: Deploy to GitHub Pages
+    needs: build-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
