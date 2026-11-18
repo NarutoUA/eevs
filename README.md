@@ -2,6 +2,12 @@
 
 EEVS is a high-performance standalone external voice server and plugin framework for FiveM Enhanced. It serves as a drop-in replacement for the [FiveM Enhanced External Voice Server](https://docs.fivem.net/docs/scripting-manual/voice/#external-voice-server), synchronizing player sessions and routing state from `cfx-server`, relaying and processing real-time player voice streams, and exposing an HTTP & WebSocket Control API alongside a native C++ Plugin SDK.
 
+## Video Showcase
+
+[![EEVS Video Showcase](https://img.youtube.com/vi/FEmXwnn63EM/maxresdefault.jpg)](https://www.youtube.com/watch?v=FEmXwnn63EM)
+
+> ▶️ [**Watch the EEVS Showcase on YouTube**](https://www.youtube.com/watch?v=FEmXwnn63EM) — Interactive AI Voice NPCs, Real-Time Signalsmith DSP Voice Effects, and In-Memory Clip Recording.
+
 ---
 
 ### Core Capabilities
