@@ -56,7 +56,7 @@ Because EEVS sits in the path of every player's session identity (`clientId` $\l
 ## Building
 
 ### Prerequisites
-- C++23 compiler (MSVC 2026+, Clang 17+, or GCC 13+)
+- C++23 compiler (MSVC 2026+, Clang 20+, or GCC 16+)
 - CMake 3.21+
 - [vcpkg](https://github.com/microsoft/vcpkg) (automatically resolves dependencies from [`vcpkg.json`](./vcpkg.json))
 

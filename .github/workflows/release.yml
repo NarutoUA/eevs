@@ -61,8 +61,12 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
           sudo apt-get install -y ninja-build pkg-config curl zip unzip tar lsb-release wget software-properties-common gnupg
+          LATEST_GCC_PKG=$(apt-cache search --names-only '^g\+\+-[0-9]+$' | awk '{print $1}' | sort -V | tail -1)
+          GCC_VER=${LATEST_GCC_PKG#g++-}
+          sudo apt-get install -y "gcc-${GCC_VER}" "g++-${GCC_VER}"
           wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- all
           LLVM_VER=$(ls /usr/bin/clang++-* | sed -E 's/.*clang\+\+-([0-9]+)$/\1/' | sort -n | tail -1)
           echo "CC=clang-${LLVM_VER}" >> $GITHUB_ENV
