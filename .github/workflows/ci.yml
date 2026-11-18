@@ -72,12 +72,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - compiler: clang++-18
-            cc: clang-18
-            cxx: clang++-18
-          - compiler: g++-14
-            cc: gcc-14
-            cxx: g++-14
+          - compiler: clang++
+            cc: clang
+            cxx: clang++
+          - compiler: g++
+            cc: gcc
+            cxx: g++
 
     steps:
       - name: Checkout repository
@@ -86,7 +86,18 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar clang-18 gcc-14 g++-14
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar lsb-release wget software-properties-common gnupg
+          if [ "${{ matrix.compiler }}" = "clang++" ]; then
+            wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- all
+            LLVM_VER=$(ls /usr/bin/clang++-* | sed -E 's/.*clang\+\+-([0-9]+)$/\1/' | sort -n | tail -1)
+            echo "CC=clang-${LLVM_VER}" >> $GITHUB_ENV
+            echo "CXX=clang++-${LLVM_VER}" >> $GITHUB_ENV
+            echo "LDFLAGS=-fuse-ld=lld-${LLVM_VER}" >> $GITHUB_ENV
+          else
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CXX=g++" >> $GITHUB_ENV
+            echo "LDFLAGS=" >> $GITHUB_ENV
+          fi
 
       - name: Set up vcpkg binary cache
         uses: actions/cache@v4
@@ -101,11 +112,10 @@ jobs:
         run: mkdir -p "${{ github.workspace }}/.vcpkg-cache"
 
       - name: Configure CMake
-        env:
-          CC: ${{ matrix.cc }}
-          CXX: ${{ matrix.cxx }}
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
+            -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build Release
@@ -115,7 +125,7 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure --verbose
 
       - name: Upload Linux Build Artifacts
-        if: matrix.compiler == 'clang++-18'
+        if: matrix.compiler == 'clang++'
         uses: actions/upload-artifact@v4
         with:
           name: eevs-linux-x64

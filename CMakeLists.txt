@@ -72,6 +72,7 @@ if(EEVS_ENABLE_AVX2)
             -fstrict-vtable-pointers
             -fno-semantic-interposition
             -fomit-frame-pointer
+            -Wno-deprecated-enum-enum-conversion
         )
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         # g++ on Linux / POSIX

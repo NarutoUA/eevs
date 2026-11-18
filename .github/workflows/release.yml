@@ -62,13 +62,18 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar clang-18
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar lsb-release wget software-properties-common gnupg
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- all
+          LLVM_VER=$(ls /usr/bin/clang++-* | sed -E 's/.*clang\+\+-([0-9]+)$/\1/' | sort -n | tail -1)
+          echo "CC=clang-${LLVM_VER}" >> $GITHUB_ENV
+          echo "CXX=clang++-${LLVM_VER}" >> $GITHUB_ENV
+          echo "LDFLAGS=-fuse-ld=lld-${LLVM_VER}" >> $GITHUB_ENV
 
       - name: Set up vcpkg binary cache
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.vcpkg-cache
-          key: vcpkg-linux-x64-clang++-18-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: vcpkg-linux-x64-clang-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
           restore-keys: |
             vcpkg-linux-x64-
 
@@ -76,11 +81,10 @@ jobs:
         run: mkdir -p "${{ github.workspace }}/.vcpkg-cache"
 
       - name: Configure & Build Release
-        env:
-          CC: clang-18
-          CXX: clang++-18
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
+            -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
           cmake --build build --config Release --parallel
           ctest --test-dir build -C Release --output-on-failure
